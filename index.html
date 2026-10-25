@@ -17,50 +17,27 @@ el('copyEnquiry').addEventListener('click',async()=>{if(!discrepancyData)return;
 function cameraStatus(s){el('cameraStatus').textContent=s}
 function stopCamera(){el('preview').classList.remove('scanning');el('stop').classList.remove('scanning');active=false;if(rotationTimer){clearInterval(rotationTimer);rotationTimer=null}rotationBusy=false;if(reader){try{reader.reset()}catch(e){}reader=null}if(el('preview').srcObject){for(const track of el('preview').srcObject.getTracks())track.stop();el('preview').srcObject=null}cameraStatus('Camera stopped.')}
 el('stop').addEventListener('click',stopCamera);
-el('start').addEventListener('click',async()=>{
+el('start').addEventListener('click',()=>{
  stopCamera();
- if(!window.isSecureContext){cameraStatus('Camera requires HTTPS. Open in Safari.');return}
- if(!navigator.mediaDevices?.getUserMedia){cameraStatus('Camera access unavailable in this browser. Open in Safari.');return}
- active=true;el('preview').classList.add('scanning');el('stop').classList.add('scanning');
- cameraStatus('Requesting camera permission…');
- let stream;
+ if(!window.isSecureContext){cameraStatus('HTTPS is required for camera access.');return}
+ if(!navigator.mediaDevices?.getUserMedia){cameraStatus('Camera not available in this browser. Open in Safari.');return}
+ if(!window.ZXing?.BrowserMultiFormatReader){cameraStatus('Barcode library did not load. Reload the page.');return}
  try{
-  try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'}}})}
-  catch(err){if(err.name==='OverconstrainedError'||err.name==='NotFoundError')stream=await navigator.mediaDevices.getUserMedia({audio:false,video:true});else throw err}
-  if(!active){stream.getTracks().forEach(t=>t.stop());return}
-  const video=el('preview');video.srcObject=stream;
-  await video.play();
-  cameraStatus('Camera active. Looking for barcode…');
-  if(!window.ZXing?.BrowserMultiFormatReader){cameraStatus('Camera active, but barcode library failed to load. Try the photo option.');return}
   reader=new ZXing.BrowserMultiFormatReader();
-  // Decoding is continuous; do not await it, as it may run until a barcode is found.
-  const decoding=reader.decodeFromStream(stream,video,(result)=>{
+  active=true;el('preview').classList.add('scanning');el('stop').classList.add('scanning');
+  cameraStatus('Requesting rear camera…');
+  // Use the previously working ZXing camera API. It handles its own stream and decode loop.
+  reader.decodeFromVideoDevice(undefined,el('preview'),(result)=>{
    if(!active||!result)return;
    const code=result.getText();
    if(!/^\d{8,14}$/.test(code))return;
    el('barcode').value=code;stopCamera();lookup();
+  }).then(()=>{if(active)cameraStatus('Camera active — point at barcode.')}).catch(err=>{
+   if(!active)return;
+   stopCamera();
+   cameraStatus('Camera error ('+(err.name||'unknown')+'): '+(err.message||err)+'. Check Safari camera permission.');
   });
-  Promise.resolve(decoding).catch(err=>{if(active)cameraStatus('Camera active, barcode reader error: '+(err.message||err)+'. Try photo scanning.')});
-  rotationTimer=setInterval(async()=>{
-   if(!active||rotationBusy||!video.videoWidth)return;
-   rotationBusy=true;
-   try{
-    const scale=Math.min(1,1200/Math.max(video.videoWidth,video.videoHeight)),w=Math.round(video.videoWidth*scale),h=Math.round(video.videoHeight*scale);
-    const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
-    for(const angle of [90,270]){
-     if(!active)break;
-     canvas.width=h;canvas.height=w;ctx.setTransform(1,0,0,1,0,0);ctx.translate(h/2,w/2);ctx.rotate(angle*Math.PI/180);ctx.drawImage(video,-w/2,-h/2,w,h);
-     const img=new Image();img.src=canvas.toDataURL('image/jpeg',0.88);await img.decode();
-     const rotatedReader=new ZXing.BrowserMultiFormatReader();
-     try{const found=await rotatedReader.decodeFromImageElement(img);const code=found.getText();if(/^\d{8,14}$/.test(code)&&active){el('barcode').value=code;stopCamera();lookup();break}}catch(e){}finally{rotatedReader.reset()}
-    }
-   }catch(e){}finally{rotationBusy=false}
-  },1500);
- }catch(err){
-  stopCamera();
-  const msg=err.name==='NotAllowedError'||err.name==='PermissionDeniedError'?'Camera access denied. In Safari, change the website Camera permission to Allow.':(err.name||'Camera error')+': '+(err.message||err);
-  cameraStatus(msg);
- }
+ }catch(err){stopCamera();cameraStatus('Scanner error: '+(err.message||err))}
 });
 
 async function decodePhotoRotations(file){
