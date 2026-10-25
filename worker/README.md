@@ -34,11 +34,18 @@ actual deployed endpoint and checks the shared UI renderer includes the evidence
 and excerpts for all preferences. These rendering assertions are not a physical-camera
 or on-device Safari test.
 
-The feature push workflow tests, then attempts an isolated preview Worker deployment.
-It requires existing GitHub secrets `CLOUDFLARE_API_TOKEN` (Workers edit) and
-`CLOUDFLARE_ACCOUNT_ID`. It fails explicitly if either is missing and then runs the
-live acceptance gate against the deployed preview. Production Pages remains on main;
-no production-complete claim is justified by a preview build or unit tests alone.
+Cloudflare Workers Builds is already connected directly to this GitHub repository.
+Verified GitHub check runs provide a feature-branch preview alias:
+`https://feature-page-evidence-research-gluten-check-au-research.h-mackay1.workers.dev`.
+This native route does not require separate Cloudflare secrets in GitHub Actions.
+The redundant token-based feature deployment job has been removed. GitHub Actions
+runs unit and browser tests; Cloudflare performs its own connected builds.
+
+A successful Cloudflare build is not proof of a reachable API or product evidence.
+Both the production and feature preview `/health` URLs returned HTTP 403 from this
+environment on 25 October 2026. Preview access/routing still needs verification;
+do not weaken access protections merely to make a check pass. Production Pages stays
+on main until review and all four live acceptance checks pass.
 
 Public discovery has no availability guarantee. Do not merge/promote while the four
 live acceptance products fail. An unavailable upstream does not mean gluten-free.

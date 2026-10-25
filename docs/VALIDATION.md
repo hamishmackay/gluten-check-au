@@ -40,6 +40,20 @@ Not complete. Do not promote this draft to production.
 2. Pass `npm run test:live` with all four products and preserve the printed evidence.
 3. Pass browser tests and review the actual evidence display, then test camera scanning
    on an iPhone. Scanner functions were retained, but hardware has not been exercised.
-4. Configure the two GitHub Actions deployment secrets, deploy preview, and rerun the
+4. Verify reachability of the existing native Cloudflare preview and rerun the
    live acceptance test against its real endpoint. Builds alone do not satisfy this.
 5. Only after all gates pass, review the PR and promote the reviewed frontend/Worker.
+
+## Deployment correction
+
+Subsequent inspection of GitHub check runs confirmed the user's existing native
+Cloudflare Workers Builds integration. Commit abeedd136977e5c56cd0eba9fb9323636d2d32d7
+has a successful `Workers Builds: gluten-check-au-research` check, with version
+b47f601d-89b7-43af-8a42-949719a8d09a and a feature-branch preview alias. The missing
+GitHub secrets blocked only the redundant Actions deployment route introduced by
+this PR. They are NOT prerequisites for the existing native Cloudflare build route.
+The redundant feature deployment job has been removed; unit/browser CI remains.
+The live preview and production health URLs still returned HTTP 403 from this
+execution environment; this alone does not establish whether Cloudflare access
+configuration or the execution network caused it. No access control was weakened.
+The three product discovery gaps remain independently unresolved.
