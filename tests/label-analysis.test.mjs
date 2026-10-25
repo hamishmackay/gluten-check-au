@@ -17,3 +17,5 @@ test('may-contain is not falsely extracted as a definite contains statement',()=
 test('blank OCR fails clearly and cannot infer declarations',()=>{const r=analyse('',0,code);assert.equal(r.empty,true);assert.equal(r.claim,false);assert.equal(r.notDetected,false);assert.equal(r.tone,'amber')});
 test('recognised text is escaped before highlighting',()=>{const html=render(analyse('Ingredients: wheat <img src=x onerror=alert(1)>',95,code));assert.ok(!html.includes('<img'));assert.match(html,/<mark>wheat<\/mark>/)});
 test('negated gluten-free statement is not a positive claim',()=>{assert.equal(analyse('This product is not gluten free. Ingredients: Wheat.',98,code).claim,false)});
+test('allergen sentences do not absorb addresses and nutrition text',()=>{const r=analyse('CONTAINS GLUTEN (OATS). QUANTITY Clayton South VIC 3169 info@example.com',90,code);assert.equal(r.allergens,'GLUTEN (OATS).');assert.equal(r.tone,'red')});
+test('a low-quality risk reading explicitly warns about missed text',()=>{const r=analyse('Ingredients: Wheat, salt.',40,code);assert.equal(r.tone,'red');assert.match(r.message,/may have been missed/)});

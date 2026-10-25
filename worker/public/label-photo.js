@@ -11,12 +11,13 @@ function loadLibrary(){
 }
 function refresh(){if(!reading)return;const context=options.getContext();if(context.code!==readingCode)return;const result=GlutenLabelAnalysis.analyse(reading.text,reading.confidence,readingCode,context.online||{},context.preference);el('labelPhotoEvidence').className='card '+result.tone;el('labelPhotoEvidence').innerHTML=GlutenLabelAnalysis.render(result);el('labelPanel').style.order='-1';el('labelPhotoEvidence').scrollIntoView({block:'start'})}
 function reset(){job++;if(worker){try{Promise.resolve(worker.terminate()).catch(()=>{})}catch{}worker=null}busy=false;reading=null;readingCode=null;if(photoURL){URL.revokeObjectURL(photoURL);photoURL=null}el('labelPhotoPreview').removeAttribute('src');el('labelPhotoPreview').hidden=true;el('labelPhotoEvidence').innerHTML='';el('labelPanel').style.order='0';el('labelPhotoCancel').hidden=true;el('labelPhoto').disabled=false;el('labelPanel').hidden=true;status('')}
-function show(){const context=options.getContext();if(!/^\d{8,14}$/.test(context.code))return;el('labelPanel').hidden=false;const pages=context.pages||[];if(!pages.some(p=>p.statements?.length))el('labelPhotoDetails').open=true}
+function show(){const context=options.getContext();if(!/^\d{8,14}$/.test(context.code))return;el('labelPanel').hidden=false;const pages=context.pages||[];if(!reading&&!busy)el('labelPhotoDetails').open=!pages.some(p=>p.statements?.length)}
 async function read(file){
  const context=options.getContext();if(!/^\d{8,14}$/.test(context.code)){status('Scan or enter the product barcode first.');return}
- if(!file.type.startsWith('image/')){status('Choose a photo of the label.');return}
- if(file.size>20*1024*1024){status('This photo is too large. Take a closer photo of the label (under 20 MB).');return}
- reset();show();const token=job;const code=context.code;busy=true;el('labelPhoto').disabled=true;el('labelPhotoCancel').hidden=false;el('labelPhotoDetails').open=true;el('labelPanel').style.order='-1';
+ reset();show();
+ if(!file.type.startsWith('image/')){status('Choose a photo of the label.');el('labelPhoto').value='';return}
+ if(file.size>20*1024*1024){status('This photo is too large. Take a closer photo of the label (under 20 MB).');el('labelPhoto').value='';return}
+ const token=job;const code=context.code;busy=true;el('labelPhoto').disabled=true;el('labelPhotoCancel').hidden=false;el('labelPhotoDetails').open=true;el('labelPanel').style.order='-1';
  photoURL=URL.createObjectURL(file);el('labelPhotoPreview').src=photoURL;el('labelPhotoPreview').hidden=false;status('Preparing the label reader… The first use downloads its reading engine.');
  let timeout,bitmap,localWorker;
  try{

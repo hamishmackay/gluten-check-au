@@ -11,7 +11,8 @@ function section(text,kind){
   if(kind==='allergens'&&/\bmay(?:\s+also)?\s*$/i.test(text.slice(Math.max(0,m.index-14),m.index)))continue;
   const rest=text.slice(m.index+m[0].length);
   const stop=/\b(?:ingredients?|allergens?|contains|may\s+(?:also\s+)?contain|nutrition(?:al)?\s+(?:information|facts)|servings?\s+(?:per|size)|storage|directions|cooking|best before|manufactured|distributed)\b/i.exec(rest);
-  const value=rest.slice(0,stop?stop.index:kind==='ingredients'?900:300).trim().replace(/^[\s:;,-]+|[\s:;,-]+$/g,'');
+  let value=rest.slice(0,stop?stop.index:kind==='ingredients'?900:300).trim().replace(/^[\s:;,-]+|[\s:;,-]+$/g,'');
+  if(kind!=='ingredients'){const sentence=/\.(?:\s|$)/.exec(value);if(sentence)value=value.slice(0,sentence.index+1)}
   if(value)return value;
  }
  return '';
@@ -38,6 +39,7 @@ function analyse(text,confidence,barcode,online={},preference='strict'){
  else if(!lowClarity&&(notDetected||claim)&&preference==='flexible')status='GLUTEN DECLARATION — PHOTO READING';
  let message=mismatch?'A different barcode was read in this photo. Do not apply this reading to the scanned product.':empty?'No useful label text was read. Try a sharper photo of the full ingredient and allergen panel.':terms.length?'Possible gluten-related words were read. Check the highlighted wording on the photo.':onlineRisk?'The photo does not cancel the online ingredient, warning or conflict already recorded.':lowClarity?'The photo was difficult to read. Missing words or warnings may have been missed. Try a clearer, closer photo.':'No gluten-related risk was read in the extracted sections. This does not establish that the product is gluten-free.';
  if(mismatch&&onlineRisk)message+=' The existing online gluten risk remains.';
+ if(lowClarity&&!empty&&terms.length)message+=' Parts of the photo were difficult to read; other words or warnings may have been missed.';
  if(conflict)message+=' The photo reading and other declarations conflict; do not rely on a positive claim.';
  if(!mismatch&&!codes.length)message+=' The photo is linked to your scanned barcode, but its product identity was not independently checked.';
  return {raw,score,lowClarity,empty,ingredients,allergens,warnings,terms,claim,notDetected,codes,mismatch,conflict,status,tone,message,barcode};
