@@ -1,10 +1,10 @@
 name = "gluten-check-au-research"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
-workers_dev = false
+workers_dev = true
 
 [vars]
-ENABLE_PUBLIC_API = "false"
+ENABLE_PUBLIC_API = "true"
 
 [[unsafe.bindings]]
 name = "USER_RATE_LIMIT"
