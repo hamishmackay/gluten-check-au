@@ -8,7 +8,7 @@ function assess(product,evidence){
  const p=product||{}, ingredients=p.ingredients_text||'';
  const allergenText=[p.allergens||'',p.traces||'',...(p.allergens_tags||[]),...(p.traces_tags||[])].join(' ');
  const labelText=[p.product_name||'',p.labels||'',...(p.labels_tags||[])].join(' ');
- const claim=/\bgluten[ -]?free\b/i.test(labelText)||evidence.some(x=>x.type==='gluten_free_claim');
+ const claim=/\b(?:gluten[ -]?free|no[ -]+gluten)\b/i.test(labelText)||evidence.some(x=>x.type==='gluten_free_claim');
  const warning=glutenTerms.test(allergenText)||/\b(?:may\s+(?:also\s+)?contain|traces?\s+of)\s*:?[^.;\n]*\b(gluten|wheat|barley|rye|spelt|triticale|malt)\b/i.test(ingredients);
  const ingredientConflict=grainTerms.test(ingredients);
  const conflicting=warning||ingredientConflict;
@@ -75,14 +75,14 @@ async function authenticatedUser(request,env){
 // No browser CORS proxies, scraping or invented product claims.
 function xmlText(xml,tag){const match=xml.match(new RegExp('<'+tag+'(?:\\s[^>]*)?>([\\s\\S]*?)<\\/'+tag+'>','i'));return match?match[1].replace(/<!\\[CDATA\\[|\\]\\]>/g,'').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim():'';}
 async function publicRssSearch(code,product){
- const q='"'+code+'" '+(product?.product_name||'')+' gluten';
+ const q='"'+code+'" gluten free';
  const endpoint='https://www.bing.com/search?format=rss&q='+encodeURIComponent(q);
  const r=await fetch(endpoint,{headers:{accept:'application/rss+xml,application/xml'},signal:AbortSignal.timeout(7500)});
  if(!r.ok)throw Error('Public RSS search HTTP '+r.status);
  const body=await r.text();
  if(!body.includes('<rss')&&!body.includes('<channel'))throw Error('Public RSS search returned no feed');
  const items=body.match(/<item>[\s\S]*?<\/item>/gi)||[];
- return items.slice(0,12).map(x=>({title:xmlText(x,'title'),description:xmlText(x,'description'),url:xmlText(x,'link')})).filter(x=>x.url.startsWith('https://')&&(x.title+' '+x.description).includes(code)).map(x=>({...x,match:'exact_barcode',statements:[],verification:'search_snippet_only'}));
+ return items.slice(0,12).map(x=>({title:xmlText(x,'title'),description:xmlText(x,'description'),url:xmlText(x,'link')})).filter(x=>x.url.startsWith('https://')&&(x.title+' '+x.description+' '+x.url).includes(code)).map(x=>({...x,match:'exact_barcode',statements:[],verification:'search_snippet_only'}));
 }
 async function webResearch(code,product,env){
  if(!env.BRAVE_SEARCH_API_KEY){try{return {status:'ok',provider:'public_rss',results:await publicRssSearch(code,product)}}catch(e){return {status:'unavailable',provider:'public_rss',results:[],errors:[String(e.message||e)]}}}
