@@ -38,8 +38,8 @@ async function approvedFeed(code,env){
 }
 export default {async fetch(request,env){
  const url=new URL(request.url);
- if(url.pathname==='/health')return json({ok:true,version:'research-v1',sources:['open_food_facts',...(env.APPROVED_PRODUCT_FEED_URL?['approved_feed']:[])]});
- const match=url.pathname.match(/^\/api\/products\/(\d{8,14})$/);
+ if(url.pathname==='/health')return json({ok:true,version:'research-v1',publicApiEnabled:env.ENABLE_PUBLIC_API==='true',sources:['open_food_facts',...(env.APPROVED_PRODUCT_FEED_URL?['approved_feed']:[])]});
+ // Fail closed: API is disabled unless explicitly enabled by the owner. No browser-embedded shared secret.\n if(env.ENABLE_PUBLIC_API!=='true')return json({error:'Research API not enabled. Owner must configure authentication, abuse controls and a request budget first.'},503);\n const match=url.pathname.match(/^\/api\/products\/(\d{8,14})$/);
  if(!match)return json({error:'Not found. Use /api/products/{barcode}'},404);
  const code=match[1],sources=[],errors=[];
  let product=null;
