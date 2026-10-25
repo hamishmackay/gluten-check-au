@@ -1,0 +1,9 @@
+{
+  "name": "Gluten Check AU",
+  "short_name": "Gluten Check",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f6fa",
+  "theme_color": "#194f78",
+  "description": "Barcode product lookup and cautious gluten warning review"
+}
