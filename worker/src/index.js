@@ -104,7 +104,7 @@ async function webResearch(code,product,env){
     if(!exact&&!nameMatch)continue;
     const statements=[];
     const excerpt=(title+' '+description);
-    for(const [type,re] of [['gluten_free_claim',/\bgluten[ -]?free\b/ig],['gluten_not_detected',/\bgluten\s*[:\-]?\s*not detected\b/ig],['may_contain_gluten',/\bmay contain[^.!;]{0,100}\b(?:gluten|wheat|barley|rye)\b/ig],['contains_gluten',/\bcontains[^.!;]{0,80}\b(?:gluten|wheat|barley|rye)\b/ig]]]){
+    for(const [type,re] of [['gluten_free_claim',/\bgluten[ -]?free\b/ig],['gluten_not_detected',/\bgluten\s*[:\-]?\s*not detected\b/ig],['may_contain_gluten',/\bmay contain[^.!;]{0,100}\b(?:gluten|wheat|barley|rye)\b/ig],['contains_gluten',/\bcontains[^.!;]{0,80}\b(?:gluten|wheat|barley|rye)\b/ig]]){
      const m=re.exec(excerpt);if(m)statements.push({type,excerpt:m[0]});
     }
     if(!found.some(x=>x.url===link))found.push({title,description,url:link,match:exact?'exact_barcode':'product_name',statements,verification:'search_snippet_only'});
