@@ -15,7 +15,39 @@ function cameraStatus(s){el('cameraStatus').textContent=s}
 function stopCamera(){active=false;if(reader){try{reader.reset()}catch(e){}reader=null}if(el('preview').srcObject){for(const track of el('preview').srcObject.getTracks())track.stop();el('preview').srcObject=null}cameraStatus('Camera stopped.')}
 el('stop').addEventListener('click',stopCamera);
 el('start').addEventListener('click',async()=>{stopCamera();if(!window.isSecureContext){cameraStatus('Camera requires HTTPS. Open the published site in Safari.');return}if(!navigator.mediaDevices?.getUserMedia){cameraStatus('Camera unavailable in this browser. Open in Safari.');return}if(!window.ZXing?.BrowserMultiFormatReader){cameraStatus('Scanner library failed to load. Check your internet connection.');return}try{reader=new ZXing.BrowserMultiFormatReader();active=true;cameraStatus('Requesting camera access…');const devices=await reader.listVideoInputDevices();const rear=devices.find(d=>/back|rear|environment/i.test(d.label));const id=rear?.deviceId||undefined;reader.decodeFromVideoDevice(id,el('preview'),(result,error)=>{if(!active||!result)return;const value=result.getText();if(!/^\\d{8,14}$/.test(value))return;el('barcode').value=value;stopCamera();lookup()}).catch(err=>{if(active){stopCamera();cameraStatus('Camera error: '+(err.message||err))}});cameraStatus('Scanning… keep the entire barcode in view, avoid glare, and move back slightly if blurry. If it will not read, use a barcode photo below.')}catch(err){stopCamera();cameraStatus('Unable to start camera: '+(err.message||err))}});
-el('barcodePhoto').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;stopCamera();cameraStatus('Reading barcode from photo…');const url=URL.createObjectURL(file);try{let value='';if('BarcodeDetector' in window){try{const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','itf']});const bitmap=await createImageBitmap(file);try{const codes=await detector.detect(bitmap);value=codes.find(x=>/^\\d{8,14}$/.test(x.rawValue))?.rawValue||''}finally{bitmap.close()}}catch(err){}}if(!value){if(!window.ZXing?.BrowserMultiFormatReader)throw Error('Scanner library unavailable');photoReader=new ZXing.BrowserMultiFormatReader();const img=new Image();img.src=url;await img.decode();const result=await photoReader.decodeFromImageElement(img);value=result.getText()}if(!/^\\d{8,14}$/.test(value))throw Error('No valid retail barcode found');el('barcode').value=value;cameraStatus('Barcode found: '+value);lookup()}catch(err){cameraStatus('Could not read the photo. Try a sharper, well-lit photo showing the full barcode, or enter its numbers manually.')}finally{URL.revokeObjectURL(url);e.target.value='';if(photoReader){try{photoReader.reset()}catch(err){}photoReader=null}}});
+async function decodePhotoRotations(file){
+  const image=await createImageBitmap(file);
+  try{
+    const rotations=[0,90,270,180];
+    const canvas=document.createElement('canvas');
+    const ctx=canvas.getContext('2d');
+    if(!ctx)throw Error('Canvas unavailable');
+    const scale=Math.min(1,1800/Math.max(image.width,image.height));
+    const w=Math.round(image.width*scale),h=Math.round(image.height*scale);
+    for(const angle of rotations){
+      canvas.width=angle%180===0?w:h;canvas.height=angle%180===0?h:w;
+      ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(angle*Math.PI/180);
+      ctx.drawImage(image,-w/2,-h/2,w,h);
+      if('BarcodeDetector' in window){
+        try{const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','itf']});const results=await detector.detect(canvas);const match=results.find(x=>/^\d{8,14}$/.test(x.rawValue));if(match)return match.rawValue}catch(e){}
+      }
+      if(window.ZXing?.BrowserMultiFormatReader){
+        const img=new Image();img.src=canvas.toDataURL('image/png');await img.decode();
+        const decoder=new ZXing.BrowserMultiFormatReader();
+        try{const result=await decoder.decodeFromImageElement(img);if(/^\d{8,14}$/.test(result.getText()))return result.getText()}catch(e){}finally{decoder.reset()}
+      }
+    }
+    throw Error('No barcode detected');
+  }finally{image.close()}
+}
+el('barcodePhoto').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];if(!file)return;
+  stopCamera();cameraStatus('Reading photo in multiple orientations…');
+  try{const value=await decodePhotoRotations(file);el('barcode').value=value;cameraStatus('Barcode found: '+value);lookup()}
+  catch(err){cameraStatus('Could not read barcode photo. Try a sharper image showing all bars, or enter the digits manually.')}
+  finally{e.target.value=''}
+});
 
 function getSaved(){try{return JSON.parse(localStorage.getItem('glutenCheckSaved')||'[]')}catch(e){return []}}
 function renderSaved(){const items=getSaved();el('saved').innerHTML=items.length?items.map(x=>'<li><button class="secondary" data-code="'+escapeHtml(x.code)+'">'+escapeHtml(x.name||x.code)+'</button></li>').join(''):'<li>No saved products yet.</li>';el('saved').querySelectorAll('button').forEach(b=>b.onclick=()=>{el('barcode').value=b.dataset.code;lookup()})}
