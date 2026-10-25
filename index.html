@@ -29,7 +29,7 @@ el('start').addEventListener('click',async()=>{
   await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}},audio:false},el('preview'),(result)=>{
    if(!active||!result)return;
    const code=result.getText();
-   if(!/^\\d{8,14}$/.test(code))return;
+   if(!/^\d{8,14}$/.test(code))return;
    el('barcode').value=code;stopCamera();lookup();
   });
   if(!active)return;
@@ -46,7 +46,7 @@ el('start').addEventListener('click',async()=>{
      canvas.width=h;canvas.height=w;ctx.setTransform(1,0,0,1,0,0);ctx.translate(h/2,w/2);ctx.rotate(angle*Math.PI/180);ctx.drawImage(video,-w/2,-h/2,w,h);
      const img=new Image();img.src=canvas.toDataURL('image/jpeg',0.88);await img.decode();
      const rotatedReader=new ZXing.BrowserMultiFormatReader();
-     try{const found=await rotatedReader.decodeFromImageElement(img);const code=found.getText();if(/^\\d{8,14}$/.test(code)&&active){el('barcode').value=code;stopCamera();lookup();break}}catch(e){}finally{rotatedReader.reset()}
+     try{const found=await rotatedReader.decodeFromImageElement(img);const code=found.getText();if(/^\d{8,14}$/.test(code)&&active){el('barcode').value=code;stopCamera();lookup();break}}catch(e){}finally{rotatedReader.reset()}
     }
    }catch(e){}finally{rotationBusy=false}
   },1500);
