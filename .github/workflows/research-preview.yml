@@ -25,3 +25,16 @@ jobs:
       - run: npm install --no-save --package-lock=false playwright
       - run: npx playwright install --with-deps chromium
       - run: node tests/browser.mjs
+  live-preview:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check existing Cloudflare preview and all acceptance products
+        env:
+          RESEARCH_API_BASE: https://feature-page-evidence-research-gluten-check-au-research.h-mackay1.workers.dev
+        run: npm run test:live

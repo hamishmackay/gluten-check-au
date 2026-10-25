@@ -13,7 +13,7 @@ export async function readURL(value,fetcher=fetch,allowedHosts=null){
   if(!r.ok)throw Error('HTTP '+r.status);
   if(!/html|json|xml|text/i.test(r.headers.get('content-type')||''))throw Error('Unsupported format');
   const reader=r.body.getReader();let size=0;const chunks=[];try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1500000)throw Error('Page too large');chunks.push(value)}}finally{await reader.cancel()}
-  const bytes=new Uint8Array(size);let n=0;for(const c of chunks){bytes.set(c,n);n+=c.length}return {url:url.href,body:new TextDecoder().decode(bytes)};
+  const bytes=new Uint8Array(size);let n=0;for(const c of chunks){bytes.set(c,n);n+=c.length}const body=new TextDecoder().decode(bytes);if(/Incapsula incident ID|<title[^>]*>\s*(?:Access Denied|Just a moment)|cf-chl-|verify you are human/i.test(body))throw Error('Source access screening');return {url:url.href,body};
  }throw Error('Too many redirects');
 }
 export function decode(s){return String(s||'').replace(/&(?:amp|quot|apos|lt|gt|nbsp);|&#(?:x[0-9a-f]+|\d+);/gi,m=>{const v={'&amp;':'&','&quot;':'"','&apos;':"'",'&lt;':'<','&gt;':'>','&nbsp;':' '};if(v[m])return v[m];const n=m[2].toLowerCase()==='x'?parseInt(m.slice(3),16):parseInt(m.slice(2),10);return n>0&&n<=0x10ffff?String.fromCodePoint(n):' '})}
@@ -32,6 +32,8 @@ export function parsePage(html,url,code,identity){
  if(products.length>1)return null;
  const p=products[0];const name=text(p?.name||title);const brand=text(typeof p?.brand==='object'?p.brand.name:p?.brand||'');
  if(title&&p?.name&&!words(p.name).every(w=>words(title).includes(w)))return null;
+ const declaredCodes=p?['gtin','gtin8','gtin12','gtin13','gtin14'].map(k=>p[k]).filter(Boolean):[];
+ if(declaredCodes.length&&!sameCode(p))return null;
  let match=p&&sameCode(p)?'exact_barcode':null;
  if(!match&&new RegExp('\\b(?:barcode|ean|gtin|apn)\\s*[:#]?\\s*0*'+code+'\\b','i').test(mainText)&&title&&mainText.includes(title))match='barcode_in_product_page';
  if(!match&&identity?.product_name&&identity?.brands&&identity?.quantity){
@@ -65,9 +67,9 @@ export async function discover(query,fetcher=fetch){
  return {urls:[...links].slice(0,6),errors};
 }
 export async function research(code,product,fetcher=fetch){
- let identity=product?.product_name?product:null;const results=[],errors=[],seen=new Set();
- const inspect=async d=>{errors.push(...d.errors);const candidates=d.urls.filter(u=>safeURL(u)&&sourceHosts.includes(new URL(u).hostname)&&!seen.has(u));candidates.forEach(u=>seen.add(u));const pages=await Promise.all(candidates.map(async u=>{try{const page=await readURL(u,fetcher,sourceHosts);return parsePage(page.body,page.url,code,identity)}catch(e){errors.push(new URL(u).hostname+': '+e.message);return null}}));for(const page of pages.filter(Boolean)){if(!results.some(r=>r.url===page.url))results.push(page);if(!identity&&page.match==='exact_barcode')identity=page.identity}};
+ let identity=product?.product_name?product:null;const results=[],errors=[],attempts=[],seen=new Set();
+ const inspect=async d=>{errors.push(...d.errors);const candidates=d.urls.filter(u=>safeURL(u)&&sourceHosts.includes(new URL(u).hostname)&&!seen.has(u));candidates.forEach(u=>seen.add(u));const pages=await Promise.all(candidates.map(async u=>{try{const page=await readURL(u,fetcher,sourceHosts);const parsed=parsePage(page.body,page.url,code,identity);attempts.push({url:page.url,outcome:parsed?'matched':'identity_not_confirmed'});return parsed}catch(e){attempts.push({url:u,outcome:'unavailable',reason:e.message});errors.push(new URL(u).hostname+': '+e.message);return null}}));for(const page of pages.filter(Boolean)){if(!results.some(r=>r.url===page.url))results.push(page);if(!identity&&page.match==='exact_barcode')identity=page.identity}};
  await inspect(await discover('"'+code+'"',fetcher));
  if(identity?.product_name){const [search,catalog]=await Promise.all([discover([identity.brands,identity.product_name,identity.quantity,'Australia ingredients allergens'].filter(Boolean).join(' '),fetcher),catalogCandidates(identity,fetcher)]);await inspect({urls:[...catalog.urls,...search.urls].slice(0,8),errors:[...search.errors,...catalog.errors]})}
- return {status:results.length?(errors.length?'partial':'ok'):'unavailable',provider:'public_html_pages',results,errors,identity};
+ return {status:results.length?(errors.length?'partial':'ok'):'unavailable',provider:'public_html_pages',results,errors,identity,attempts,identityStatus:identity?'database_or_exact_page':'unresolved'};
 }
