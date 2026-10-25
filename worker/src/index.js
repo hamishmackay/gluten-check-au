@@ -71,27 +71,51 @@ async function authenticatedUser(request,env){
  }catch{return null}
 }
 
+// Product research uses an explicitly configured search provider.
+// No browser CORS proxies, scraping or invented product claims.
+async function webResearch(code,product,env){
+ if(!env.BRAVE_SEARCH_API_KEY)return {status:'not_configured',results:[]};
+ const name=product?.product_name||'';
+ const queries=['"'+code+'" gluten free allergens','"'+code+'" '+name+' ingredients may contain'];
+ const found=[];const errors=[];
+ for(const q of queries){
+  try{
+   const url='https://api.search.brave.com/res/v1/web/search?q='+encodeURIComponent(q)+'&count=10&country=au&search_lang=en';
+   const r=await fetch(url,{headers:{accept:'application/json','x-subscription-token':env.BRAVE_SEARCH_API_KEY}});
+   if(!r.ok)throw Error('Search provider HTTP '+r.status);
+   const data=await r.json();
+   for(const item of data.web?.results||[]){
+    const title=String(item.title||'');const description=String(item.description||'').replace(/<[^>]+>/g,' ');
+    const link=String(item.url||'');
+    if(!link.startsWith('https://'))continue;
+    const exact=(title+' '+description+' '+link).includes(code);
+    const nameMatch=name&&name.length>4&&name.toLowerCase().split(/\s+/).filter(w=>w.length>3).slice(0,3).every(w=>(title+' '+description).toLowerCase().includes(w));
+    if(!exact&&!nameMatch)continue;
+    const statements=[];
+    const excerpt=(title+' '+description);
+    for(const [type,re] of [['gluten_free_claim',/\bgluten[ -]?free\b/ig],['gluten_not_detected',/\bgluten\s*[:\-]?\s*not detected\b/ig],['may_contain_gluten',/\bmay contain[^.!;]{0,100}\b(?:gluten|wheat|barley|rye)\b/ig],['contains_gluten',/\bcontains[^.!;]{0,80}\b(?:gluten|wheat|barley|rye)\b/ig]]]){
+     const m=re.exec(excerpt);if(m)statements.push({type,excerpt:m[0]});
+    }
+    if(!found.some(x=>x.url===link))found.push({title,description,url:link,match:exact?'exact_barcode':'product_name',statements,verification:'search_snippet_only'});
+   }
+  }catch(e){errors.push(String(e.message||e))}
+ }
+ return {status:errors.length?'partial':'ok',results:found.slice(0,12),errors};
+}
 export default {async fetch(request,env){
  const url=new URL(request.url);
- if(url.pathname==='/health')return json({ok:true,version:'research-v1',publicApiEnabled:env.ENABLE_PUBLIC_API==='true',sources:['open_food_facts',...(env.APPROVED_PRODUCT_FEED_URL?['approved_feed']:[])]});
- // Fail closed: API is disabled unless explicitly enabled by the owner. No browser-embedded shared secret.
- if(env.ENABLE_PUBLIC_API!=='true')return json({error:'Research API not enabled. Owner must configure authentication, abuse controls and a request budget first.'},503);
+ if(url.pathname==='/health')return json({ok:true,version:'research-v2',enabled:env.ENABLE_PUBLIC_API==='true',searchConfigured:!!env.BRAVE_SEARCH_API_KEY});
+ if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,OPTIONS','access-control-allow-headers':'content-type'}});
  const match=url.pathname.match(/^\/api\/products\/(\d{8,14})$/);
- if(!match)return json({error:'Not found. Use /api/products/{barcode}'},404);
+ if(!match)return json({error:'Not found'},404);
  if(request.method!=='GET')return json({error:'Method not allowed'},405);
- const userId=await authenticatedUser(request,env);
- if(!userId)return authError('Authentication required or Supabase not configured.');
- // The Cloudflare rate-limiter binding must exist before public access can be enabled.
- if(!env.USER_RATE_LIMIT||typeof env.USER_RATE_LIMIT.limit!=='function')return authError('Rate limiter not configured.',503);
- try{const limit=await env.USER_RATE_LIMIT.limit({key:userId});if(!limit.success)return authError('Too many requests. Please try later.',429)}catch{return authError('Rate limiter unavailable.',503)}
- const code=match[1],sources=[],errors=[];
- let product=null;
- try{product=await openFoodFacts(code);if(product)sources.push({source:'Open Food Facts',url:'https://world.openfoodfacts.org/product/'+code,kind:'community',updated:product.last_modified_t||null});}catch(e){errors.push('Open Food Facts: '+e.message)}
- let feed=null;
- try{feed=await approvedFeed(code,env);if(feed)sources.push({source:feed.source||'Approved product feed',url:typeof feed.claimUrl==='string'&&feed.claimUrl.startsWith('https://')?feed.claimUrl:null,kind:'provider',updated:feed.updated||null});}catch(e){errors.push('Approved feed: '+e.message)}
- if(feed){
-  product={...product,product_name:feed.name||product?.product_name||'',brands:feed.brand||product?.brands||'',ingredients_text:feed.ingredients??product?.ingredients_text??'',allergens:feed.allergens??product?.allergens??'',traces:feed.traces??product?.traces??'',labels:[product?.labels||'',feed.glutenFreeClaim?'gluten free':''].join(' ')};
- }
- const evidence=feed?.glutenFreeClaim?[{type:'gluten_free_claim',source:feed.source||'Approved product feed'}]:[];
- return json({barcode:code,found:!!product,product:product||null,assessment:assess(product,evidence),sources,errors,sourceCount:sources.length});
+ if(env.ENABLE_PUBLIC_API!=='true')return json({error:'Research API not enabled'},503);
+ if(!env.USER_RATE_LIMIT||typeof env.USER_RATE_LIMIT.limit!=='function')return json({error:'Rate limiter unavailable'},503);
+ const client=request.headers.get('cf-connecting-ip')||'anonymous';
+ try{const limit=await env.USER_RATE_LIMIT.limit({key:client});if(!limit.success)return json({error:'Rate limit exceeded'},429)}catch{return json({error:'Rate limiter failed'},503)}
+ const code=match[1];let product=null;const errors=[];
+ try{product=await openFoodFacts(code)}catch(e){errors.push('Open Food Facts: '+e.message)}
+ let web;
+ try{web=await webResearch(code,product,env)}catch(e){web={status:'error',results:[],errors:[String(e.message||e)]}}
+ return json({barcode:code,found:!!product,product,assessment:assess(product,[]),web,sources:product?[{source:'Open Food Facts',url:'https://world.openfoodfacts.org/product/'+code}]:[],errors});
 }};
