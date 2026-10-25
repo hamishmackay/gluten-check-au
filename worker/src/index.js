@@ -74,18 +74,45 @@ async function authenticatedUser(request,env){
 // Product research uses an explicitly configured search provider.
 // No browser CORS proxies, scraping or invented product claims.
 function xmlText(xml,tag){const match=xml.match(new RegExp('<'+tag+'(?:\\s[^>]*)?>([\\s\\S]*?)<\\/'+tag+'>','i'));return match?match[1].replace(/<!\\[CDATA\\[|\\]\\]>/g,'').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim():'';}
+function cleanWords(v){return String(v||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>2&&!['the','and','with','for','ayam'].includes(w))}
+function matchingProduct(item,code,product){
+ const text=(item.title+' '+item.description+' '+item.url).toLowerCase();
+ if(text.includes(code))return 'exact_barcode';
+ const brand=String(product?.brands||'').split(',')[0].trim().toLowerCase();
+ const nameWords=cleanWords(product?.product_name);
+ if(!brand||nameWords.length<2||!text.includes(brand))return null;
+ return nameWords.every(w=>text.includes(w))?'brand_and_product_name':null;
+}
+function statementsFromText(value){
+ const text=String(value||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+ const patterns=[['gluten_not_detected',/\bgluten\s*[:\-]?\s*not detected\b/i],['may_contain_gluten',/\bmay contain[^.;]{0,90}\b(?:gluten|wheat|barley|rye)\b/i],['contains_gluten',/\bcontains[^.;]{0,80}\b(?:gluten|wheat|barley|rye)\b/i],['gluten_free_claim',/\bgluten[ -]?free\b/i]];
+ return patterns.flatMap(([type,re])=>{const m=text.match(re);return m?[{type,excerpt:m[0]}]:[]});
+}
 async function publicRssSearch(code,product){
- const q='"'+code+'" gluten free';
- const endpoint='https://www.bing.com/search?format=rss&q='+encodeURIComponent(q);
- const r=await fetch(endpoint,{headers:{accept:'application/rss+xml,application/xml'},signal:AbortSignal.timeout(7500)});
- if(!r.ok)throw Error('Public RSS search HTTP '+r.status);
- const body=await r.text();
- if(!body.includes('<rss')&&!body.includes('<channel'))throw Error('Public RSS search returned no feed');
- const items=body.match(/<item>[\s\S]*?<\/item>/gi)||[];
- return items.slice(0,12).map(x=>({title:xmlText(x,'title'),description:xmlText(x,'description'),url:xmlText(x,'link')})).filter(x=>x.url.startsWith('https://')&&(x.title+' '+x.description+' '+x.url).includes(code)).map(x=>({...x,match:'exact_barcode',statements:[],verification:'search_snippet_only'}));
+ const brand=String(product?.brands||'').split(',')[0].trim();
+ const name=String(product?.product_name||'').trim();
+ const queries=['"'+code+'"','"'+brand+' '+name+'" gluten free','"'+brand+' '+name+'" ingredients allergens'];
+ const found=new Map(),errors=[];
+ await Promise.all(queries.map(async q=>{
+  try{
+   const endpoint='https://www.bing.com/search?format=rss&q='+encodeURIComponent(q);
+   const r=await fetch(endpoint,{headers:{accept:'application/rss+xml,application/xml'},signal:AbortSignal.timeout(7500)});
+   if(!r.ok)throw Error('RSS HTTP '+r.status);
+   const body=await r.text();
+   if(!body.includes('<rss')&&!body.includes('<channel'))throw Error('No RSS feed');
+   for(const x of (body.match(/<item>[\s\S]*?<\/item>/gi)||[]).slice(0,12)){
+    const item={title:xmlText(x,'title'),description:xmlText(x,'description'),url:xmlText(x,'link')};
+    if(!item.url.startsWith('https://'))continue;
+    const match=matchingProduct(item,code,product);
+    if(!match||found.has(item.url))continue;
+    found.set(item.url,{...item,match,statements:statementsFromText(item.title+' '+item.description),verification:'search_snippet_only'});
+   }
+  }catch(e){errors.push(String(e.message||e))}
+ }));
+ return {status:errors.length?(found.size?'partial':'unavailable'):'ok',provider:'public_rss',results:[...found.values()].slice(0,12),errors};
 }
 async function webResearch(code,product,env){
- if(!env.BRAVE_SEARCH_API_KEY){try{return {status:'ok',provider:'public_rss',results:await publicRssSearch(code,product)}}catch(e){return {status:'unavailable',provider:'public_rss',results:[],errors:[String(e.message||e)]}}}
+ if(!env.BRAVE_SEARCH_API_KEY){try{return await publicRssSearch(code,product)}catch(e){return {status:'unavailable',provider:'public_rss',results:[],errors:[String(e.message||e)]}}}
  const name=product?.product_name||'';
  const queries=['"'+code+'" gluten free allergens','"'+code+'" '+name+' ingredients may contain'];
  const found=[];const errors=[];
