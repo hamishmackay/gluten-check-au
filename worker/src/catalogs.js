@@ -24,3 +24,21 @@ export function ayamPage(html,url,code){
  const description=['hikashop_product_description_main','hikashop_show_tabular_description','hikashop_show_tabular_ingredients','hikashop_show_tabular_allergen'].map(id=>element(scope,id)).filter(Boolean).map(text).join(' ');
  return {name,description};
 }
+
+// Native store searches are a separate discovery channel, not declaration evidence.
+// Every returned link must still pass the fetched-page GTIN/name/size checks.
+export async function retailerCandidates(code,identity,fetcher=fetch){
+ const query=identity?.product_name?[identity.brands,identity.product_name,identity.quantity].filter(Boolean).join(' '):code;
+ const stores=[{origin:'https://www.woolworths.com.au',path:'/shop/search/products',parameter:'searchTerm',product:/^\/shop\/productdetails\/\d+\//},{origin:'https://www.harrisfarm.com.au',path:'/search',parameter:'q',product:/^\/products\//}];
+ const found=[],errors=[];
+ await Promise.all(stores.map(async store=>{
+  const url=new URL(store.path,store.origin);url.searchParams.set(store.parameter,query);
+  try{
+   const page=await readURL(url.href,fetcher,[new URL(store.origin).hostname]);
+   const wanted=tokens(identity?.product_name||'');const score=u=>wanted.filter(w=>tokens(new URL(u).pathname).includes(w)).length;
+   const candidates=links(page.body,page.url).filter(u=>store.product.test(new URL(u).pathname));
+   found.push(...candidates.sort((a,b)=>score(b)-score(a)).slice(0,3));
+  }catch(e){errors.push(new URL(store.origin).hostname+' catalogue: '+e.message)}
+ }));
+ return {urls:[...new Set(found)].slice(0,6),errors};
+}

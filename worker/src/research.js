@@ -1,4 +1,4 @@
-import {catalogCandidates,ayamPage} from './catalogs.js';
+import {catalogCandidates,ayamPage,retailerCandidates} from './catalogs.js';
 // Discovery text is never declaration evidence. Only retrieved product pages qualify.
 const sourceHosts=['ayam.com','www.ayam.com','majans.com.au','www.majans.com.au','redtractorfoods.com.au','www.redtractorfoods.com.au','coles.com.au','www.coles.com.au','woolworths.com.au','www.woolworths.com.au','harrisfarm.com.au','www.harrisfarm.com.au','iga.com.au','www.iga.com.au','asiangroceronline.com.au','www.asiangroceronline.com.au','asianmarketgrocery.com.au','www.asianmarketgrocery.com.au','umall.com.au','www.umall.com.au'];
 const agent='GlutenCheckAU/0.3 (+https://github.com/hamishmackay/gluten-check-au)';
@@ -72,7 +72,7 @@ export async function research(code,product,fetcher=fetch){
  const namedDiscovery=async()=>{const [search,catalog]=await Promise.all([discover([identity.brands,identity.product_name,identity.quantity,'Australia ingredients allergens'].filter(Boolean).join(' '),fetcher),catalogCandidates(identity,fetcher)]);return {urls:[...catalog.urls,...search.urls].slice(0,8),errors:[...search.errors,...catalog.errors]}};
  // A known database identity allows independent discoveries to run together.
  // Unknown barcodes still need exact-page identification before any name search.
- if(identity){const [barcode,named]=await Promise.all([discover('"'+code+'"',fetcher),namedDiscovery()]);await inspect({urls:[...barcode.urls,...named.urls],errors:[...barcode.errors,...named.errors]})}
- else{await inspect(await discover('"'+code+'"',fetcher));if(identity)await inspect(await namedDiscovery())}
+ if(identity){const [barcode,named,retail]=await Promise.all([discover('"'+code+'"',fetcher),namedDiscovery(),retailerCandidates(code,identity,fetcher)]);await inspect({urls:[...retail.urls,...barcode.urls,...named.urls],errors:[...retail.errors,...barcode.errors,...named.errors]})}
+ else{const [barcode,retail]=await Promise.all([discover('"'+code+'"',fetcher),retailerCandidates(code,null,fetcher)]);await inspect({urls:[...retail.urls,...barcode.urls],errors:[...retail.errors,...barcode.errors]});if(identity)await inspect(await namedDiscovery())}
  return {status:results.length?(errors.length?'partial':'ok'):'unavailable',provider:'public_html_pages',results,errors,identity,attempts,identityStatus:identity?'database_or_exact_page':'unresolved'};
 }
