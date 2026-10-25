@@ -17,7 +17,46 @@ el('copyEnquiry').addEventListener('click',async()=>{if(!discrepancyData)return;
 function cameraStatus(s){el('cameraStatus').textContent=s}
 function stopCamera(){el('preview').classList.remove('scanning');el('stop').classList.remove('scanning');active=false;if(rotationTimer){clearInterval(rotationTimer);rotationTimer=null}rotationBusy=false;if(reader){try{reader.reset()}catch(e){}reader=null}if(el('preview').srcObject){for(const track of el('preview').srcObject.getTracks())track.stop();el('preview').srcObject=null}cameraStatus('Camera stopped.')}
 el('stop').addEventListener('click',stopCamera);
-el('start').addEventListener('click',async()=>{stopCamera();if(!window.isSecureContext){cameraStatus('Camera requires HTTPS. Open the published site in Safari.');return}if(!navigator.mediaDevices?.getUserMedia){cameraStatus('Camera unavailable in this browser. Open in Safari.');return}if(!window.ZXing?.BrowserMultiFormatReader){cameraStatus('Scanner library failed to load. Check your internet connection.');return}try{reader=new ZXing.BrowserMultiFormatReader();active=true;el('preview').classList.add('scanning');el('stop').classList.add('scanning');cameraStatus('Requesting camera access…');const devices=await reader.listVideoInputDevices();const rear=devices.find(d=>/back|rear|environment/i.test(d.label));const id=rear?.deviceId||undefined;reader.decodeFromVideoDevice(id,el('preview'),(result,error)=>{if(!active||!result)return;const value=result.getText();if(!/^\d{8,14}$/.test(value))return;el('barcode').value=value;stopCamera();lookup()}).catch(err=>{if(active){stopCamera();cameraStatus('Camera error: '+(err.message||err))}});cameraStatus('Scanning… also trying rotated frames. Hold steady and avoid glare.');rotationTimer=setInterval(async()=>{if(!active||rotationBusy||!el('preview').videoWidth)return;rotationBusy=true;try{const video=el('preview');const scale=Math.min(1,1200/Math.max(video.videoWidth,video.videoHeight));const w=Math.round(video.videoWidth*scale),h=Math.round(video.videoHeight*scale);const canvas=document.createElement('canvas');const ctx=canvas.getContext('2d');for(const angle of [90,270]){if(!active)break;canvas.width=h;canvas.height=w;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,h,w);ctx.translate(h/2,w/2);ctx.rotate(angle*Math.PI/180);ctx.drawImage(video,-w/2,-h/2,w,h);const img=new Image();img.src=canvas.toDataURL('image/jpeg',0.9);await img.decode();const rotatedReader=new ZXing.BrowserMultiFormatReader();try{const found=await rotatedReader.decodeFromImageElement(img);const code=found.getText();if(/^\\d{8,14}$/.test(code)&&active){el('barcode').value=code;stopCamera();lookup();break}}catch(e){}finally{rotatedReader.reset()}}}catch(e){}finally{rotationBusy=false}},1200)}catch(err){stopCamera();cameraStatus('Unable to start camera: '+(err.message||err))}});
+el('start').addEventListener('click',async()=>{
+ stopCamera();
+ if(!window.isSecureContext){cameraStatus('Camera requires HTTPS. Open this site in Safari.');return}
+ if(!navigator.mediaDevices?.getUserMedia){cameraStatus('Camera unavailable here. Open in Safari and allow camera access.');return}
+ if(!window.ZXing?.BrowserMultiFormatReader){cameraStatus('Barcode scanner library failed to load. Check internet and reload.');return}
+ active=true;el('preview').classList.add('scanning');el('stop').classList.add('scanning');cameraStatus('Starting rear camera…');
+ try{
+  reader=new ZXing.BrowserMultiFormatReader();
+  // Request the environment camera directly; listing devices before permission can fail on iOS.
+  await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}},audio:false},el('preview'),(result)=>{
+   if(!active||!result)return;
+   const code=result.getText();
+   if(!/^\\d{8,14}$/.test(code))return;
+   el('barcode').value=code;stopCamera();lookup();
+  });
+  if(!active)return;
+  cameraStatus('Scanning. Keep barcode in frame; rotate the product if needed.');
+  rotationTimer=setInterval(async()=>{
+   if(!active||rotationBusy||!el('preview').videoWidth)return;
+   rotationBusy=true;
+   try{
+    const video=el('preview'),scale=Math.min(1,1200/Math.max(video.videoWidth,video.videoHeight));
+    const w=Math.round(video.videoWidth*scale),h=Math.round(video.videoHeight*scale);
+    const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
+    for(const angle of [90,270]){
+     if(!active)break;
+     canvas.width=h;canvas.height=w;ctx.setTransform(1,0,0,1,0,0);ctx.translate(h/2,w/2);ctx.rotate(angle*Math.PI/180);ctx.drawImage(video,-w/2,-h/2,w,h);
+     const img=new Image();img.src=canvas.toDataURL('image/jpeg',0.88);await img.decode();
+     const rotatedReader=new ZXing.BrowserMultiFormatReader();
+     try{const found=await rotatedReader.decodeFromImageElement(img);const code=found.getText();if(/^\\d{8,14}$/.test(code)&&active){el('barcode').value=code;stopCamera();lookup();break}}catch(e){}finally{rotatedReader.reset()}
+    }
+   }catch(e){}finally{rotationBusy=false}
+  },1500);
+ }catch(err){
+  stopCamera();
+  const name=err.name||'';
+  cameraStatus((name==='NotAllowedError'||name==='PermissionDeniedError')?'Camera permission blocked. In Safari, open Page Settings (aA) → Website Settings → Camera → Allow, then retry.':'Camera failed: '+(err.message||err)+'. Try Safari and reload.');
+ }
+});
+
 async function decodePhotoRotations(file){
   const image=await createImageBitmap(file);
   try{
