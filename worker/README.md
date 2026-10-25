@@ -1,29 +1,44 @@
-# Gluten Check AU — research service (phase 1)
+# Page-evidence research (feature branch; acceptance not yet passed)
 
-This Cloudflare Worker implements a barcode-based, source-attributed product research API.
+`GET /api/products/{barcode}` returns the database identity, retrieved page declarations,
+source URLs, match basis, retrieval time, rule-based assessment and source failures.
 
-## Endpoints
-- `GET /health` — health and configured sources
-- `GET /api/products/{barcode}` — product, assessment, source provenance, provider errors
+The backend performs barcode discovery followed by brand/name/pack-size discovery. It
+also follows configured manufacturer catalog structures. The AYAM HikaShop adapter
+checks the actual barcode-bearing product container and extracts description and
+nutrition/ingredient tabs, excluding recipes and menus. No individual product result
+is hardcoded. Other pages require a single Product JSON-LD record with matching GTIN,
+or a product heading with barcode in the product body, or brand + name + known pack
+size. Search excerpts never count as evidence. Missing pack size cannot be guessed.
 
-## Current capability
-- Open Food Facts barcode lookup with explicit provenance.
-- Optional **approved manufacturer/retailer JSON feed** configured with `APPROVED_PRODUCT_FEED_URL` (HTTPS only).
-- Cautious classification: a gluten-free claim is **CLAIM**, not automatically certified GREEN. Conflicting ingredients or warnings override the claim to AMBER; a risk without a claim is RED.
-- Missing records remain AMBER. No silent assumption of gluten safety.
-- Does **not** claim to scrape Coles, Woolworths, or manufacturer sites; no such integrations are active until approved data sources are connected.
+Discovery uses public DuckDuckGo HTML with Bing HTML fallback, not Bing RSS. These
+services may challenge or return irrelevant/empty results. This is a material reliability
+limitation, not a configured guaranteed search service. The supported source-host list
+in `research.js` restricts fetched product pages to known manufacturer/retailer sites.
+Catalog configuration is in `catalogs.js`; unsupported stores remain unsupported.
+Redirects, response sizes, HTTPS destinations and fetch timeouts are bounded. Rendering
+escapes source text and only permits HTTPS links. Sites returning 403/429 or challenges
+remain unavailable; no bypass proxies, AI API, paid search API or credentials are used.
 
-## Deploy
-1. Create a Cloudflare account and obtain an account ID and Workers edit API token.
-2. Add GitHub Actions secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`.
-3. Run the **Deploy research API** GitHub Actions workflow (or `cd worker && npx wrangler deploy`).
-4. Confirm `https://gluten-check-au-research.<your-subdomain>.workers.dev/health`.
-5. Add the full deployed Worker origin (no trailing slash) to the frontend `RESEARCH_API_BASE` setting in `index.html` and deploy the page.
-6. To enable a legally usable supplier feed, set `APPROVED_PRODUCT_FEED_URL` as a Worker variable to an approved HTTPS JSON source matching the example below.
+Claims remain CLAIM, never GREEN. Ingredient/warning risks override preferences;
+claim/risk conflicts remain AMBER. Oats are treated conservatively. Missing warnings
+remain unknown. “Gluten not detected” is displayed according to the existing strict,
+gluten-avoidance and reduced-gluten choices without certification.
 
-Example feed:
-```json
-{"1234567890123":{"name":"Example","brand":"Example","glutenFreeClaim":true,"claimUrl":"https://example.com/product","ingredients":"rice flour, salt","allergens":"","traces":"","source":"Manufacturer","updated":"2026-10-25"}}
-```
+## Test and deploy
 
-**Important:** A feed entry must be independently validated to match the exact barcode. No invented product records. Do not use arbitrary web search snippets to issue a GREEN result.
+From repository root: `npm test`; `npm run test:live` exercises the real Worker handler
+against external sources and fails if any of the four acceptance products lacks a
+retrieved declaration. `RESEARCH_API_BASE=https://... npm run test:live` checks an
+actual deployed endpoint and checks the shared UI renderer includes the evidence links
+and excerpts for all preferences. These rendering assertions are not a physical-camera
+or on-device Safari test.
+
+The feature push workflow tests, then attempts an isolated preview Worker deployment.
+It requires existing GitHub secrets `CLOUDFLARE_API_TOKEN` (Workers edit) and
+`CLOUDFLARE_ACCOUNT_ID`. It fails explicitly if either is missing and then runs the
+live acceptance gate against the deployed preview. Production Pages remains on main;
+no production-complete claim is justified by a preview build or unit tests alone.
+
+Public discovery has no availability guarantee. Do not merge/promote while the four
+live acceptance products fail. An unavailable upstream does not mean gluten-free.
