@@ -3,7 +3,7 @@ on:
   push:
     branches: [feature/page-evidence-research]
   pull_request:
-    paths: ['worker/**', 'tests/**', 'research-ui.js', 'index.html']
+    paths: ['worker/**', 'tests/**', 'research-ui.js', 'label-analysis.js', 'label-photo.js', 'index.html']
 permissions:
   contents: read
 jobs:
@@ -25,6 +25,12 @@ jobs:
       - run: npm install --no-save --package-lock=false playwright
       - run: npx playwright install --with-deps chromium
       - run: node tests/browser.mjs
+      - run: node tests/browser-ocr.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: label-reader-browser
+          path: test-results/
   live-preview:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -59,4 +65,24 @@ jobs:
         if: always()
         with:
           name: live-browser-evidence
+          path: test-results/
+  live-label-reader:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      RESEARCH_API_BASE: https://feature-page-evidence-research-gluten-check-au-research.h-mackay1.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-save --package-lock=false playwright
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/wait-preview.mjs
+      - run: node tests/browser-ocr.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-label-reader-evidence
           path: test-results/

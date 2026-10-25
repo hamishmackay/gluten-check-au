@@ -16,3 +16,17 @@ unreliable. Ingredient/declaration extraction is conservative and incomplete for
 JavaScript-only pages. Name/size matches are weaker than exact GTIN and are labelled.
 No laboratory, current-pack or certification verification is performed. Physical
 barcode camera behavior still needs device testing after a reviewed deployment.
+
+## Label-photo fallback
+
+Images and OCR text are handled locally in the page and a browser Web Worker. There
+is no image-upload or OCR-text endpoint. Tesseract.js is pinned and downloaded lazily
+from its public CDN; that is executable third-party dependency code, not a remote OCR
+service. Photos/text are not saved to localStorage or the product cache. Blob URLs
+are revoked on reset/page exit, recognition is bounded by a timeout, and workers are
+terminated on cancellation or a new lookup. Photo text is escaped before display.
+
+OCR can omit a negation or a whole warning. Its confidence value is a recognition
+quality measure, not safety probability. Positive photo text never issues a verified
+or GREEN result; existing web/database risks remain. A mismatching readable barcode
+is flagged and the photo is not treated as evidence for the selected product.

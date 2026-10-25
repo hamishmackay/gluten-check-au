@@ -2,7 +2,7 @@
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 const check=process.argv.includes('--check');
-const files=['index.html','research-ui.js','sw.js','manifest.webmanifest'];
+const files=['index.html','research-ui.js','label-analysis.js','label-photo.js','sw.js','manifest.webmanifest'];
 const digest=createHash('sha256');
 for(const name of [...files,'worker/src/index.js','worker/src/research.js','worker/src/catalogs.js','worker/wrangler.toml','scripts/build-preview.mjs'])digest.update(name+'\n'+await readFile(new URL('../'+name,import.meta.url),'utf8'));
 const sourceDigest=digest.digest('hex');

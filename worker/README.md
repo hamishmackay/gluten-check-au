@@ -68,3 +68,23 @@ variant barcodes, and named fallback is used only after a barcode query has no r
 Only candidate URLs are taken from discovery; statements are extracted from the
 subsequently retrieved product pages. Oversized, screened or unavailable responses
 remain explicit source failures. This improves coverage but does not guarantee it.
+
+## Optional on-device label-photo fallback
+
+After a barcode lookup, the app can read a photo of the full ingredient/allergen panel
+using a lazy-loaded, pinned Tesseract.js 6.0.1 browser worker. The image is resized in
+local canvas memory and sent only to that local worker. App code does not send the
+photo or OCR text to this research API or an external OCR service. Engine/language
+files download from the library's public CDN on first use; internet is needed for
+that download. Recognition can be cancelled, and changing barcode clears the photo.
+
+`label-analysis.js` extracts sections and highlights possible grain/gluten words.
+Every positive photo reading remains unverified; it cannot erase an online risk.
+Low-quality readings, missing statements and different photographed barcodes remain
+explicit. A photo without a readable barcode is associated with the user's scanned
+code but not independently verified as that product. Images/text are not persisted.
+This fallback does not solve or count as the original four-product web-evidence gate.
+
+`tests/browser-ocr.mjs` runs the real OCR engine on rendered test labels and a retrieved
+manufacturer label image, checks warnings/preferences/reset/cancel and records any
+HTTP writes. CI also exercises it against the exact deployed preview version.

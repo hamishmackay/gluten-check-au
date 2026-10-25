@@ -5,6 +5,7 @@
     "test:live": "node tests/live.mjs",
     "test:browser": "node tests/browser.mjs",
     "build:preview": "node scripts/build-preview.mjs",
-    "test:browser:live": "node tests/browser-live.mjs"
+    "test:browser:live": "node tests/browser-live.mjs",
+    "test:browser:ocr": "node tests/browser-ocr.mjs"
   }
 }

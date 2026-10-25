@@ -3,7 +3,7 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const require=createRequire(import.meta.url);const {chromium}=require('playwright');
-const server=createServer(async(req,res)=>{try{const path=req.url.split('?')[0];if(!['/','/index.html','/research-ui.js','/manifest.webmanifest'].includes(path)){res.writeHead(404);res.end();return}res.setHeader('content-type',path.endsWith('.js')?'text/javascript':'text/html');res.end(await readFile(new URL('..'+(path==='/'?'/index.html':path),import.meta.url)))}catch{res.writeHead(500);res.end()}});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const server=createServer(async(req,res)=>{try{const path=req.url.split('?')[0];if(!['/','/index.html','/research-ui.js','/label-analysis.js','/label-photo.js','/manifest.webmanifest'].includes(path)){res.writeHead(404);res.end();return}res.setHeader('content-type',path.endsWith('.js')?'text/javascript':'text/html');res.end(await readFile(new URL('..'+(path==='/'?'/index.html':path),import.meta.url)))}catch{res.writeHead(500);res.end()}});await new Promise(r=>server.listen(0,'127.0.0.1',r));
 let browser;
 try{
  browser=await chromium.launch({headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:390,height:844}});const errors=[];page.on('pageerror',e=>errors.push(e.message));

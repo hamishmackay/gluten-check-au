@@ -95,3 +95,17 @@ The three product discovery gaps remain independently unresolved.
   GTINs, so it has not been misrepresented as a working identification provider.
 - Current local deterministic suite: 21 tests passed. Final deployed checks of these
   latest changes remain a distinct gate; no four-product completion is claimed.
+
+## Photo-fallback scope accepted
+
+The user agreed to try an optional label-photo fallback while noting that manual
+label reading alone adds little value. The implemented scope is automatic on-device
+text extraction with highlighted ingredients/allergens/warnings, not manual entry.
+Positive OCR cannot clear a product, override an existing risk, or count as verified
+manufacturer/retailer web evidence. No photo or OCR text is uploaded by the app.
+
+Initial local suite: 35 tests passed, including photo section extraction, low clarity,
+preferences, oats, conflicting evidence, mismatched barcodes and escaping. Actual OCR
+browser tests and deployment are separate gates; parser tests are not proof that the
+reading engine works on a photo. See the label-reader-browser and live-label-reader
+Actions artifacts for real-engine screenshots and recognition output when available.
