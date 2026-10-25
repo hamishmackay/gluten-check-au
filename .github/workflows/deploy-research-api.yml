@@ -1,11 +1,6 @@
 name: Deploy research API
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'worker/**'
-      - '.github/workflows/deploy-research-api.yml'
 jobs:
   deploy:
     runs-on: ubuntu-latest
