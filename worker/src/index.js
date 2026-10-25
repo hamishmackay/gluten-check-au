@@ -36,6 +36,41 @@ async function approvedFeed(code,env){
  if(!item||typeof item!=='object')return null;
  return item;
 }
+
+const authError=(message,status=401)=>new Response(JSON.stringify({error:message}),{status,headers:{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'}});
+function decodeBase64Url(value){
+ const normalized=value.replace(/-/g,'+').replace(/_/g,'/');
+ const raw=atob(normalized.padEnd(Math.ceil(normalized.length/4)*4,'='));
+ return Uint8Array.from(raw,c=>c.charCodeAt(0));
+}
+async function authenticatedUser(request,env){
+ // Require an explicitly configured Supabase project; never trust unsigned JWT payloads.
+ if(!env.SUPABASE_URL)return null;
+ let origin;
+ try{origin=new URL(env.SUPABASE_URL)}catch{return null}
+ if(origin.protocol!=='https:'||!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(origin.origin))return null;
+ const authorization=request.headers.get('authorization')||'';
+ if(!/^Bearer [A-Za-z0-9._-]+$/.test(authorization))return null;
+ const token=authorization.slice(7),parts=token.split('.');
+ if(parts.length!==3||token.length>8192)return null;
+ let header,payload;
+ try{header=JSON.parse(new TextDecoder().decode(decodeBase64Url(parts[0])));payload=JSON.parse(new TextDecoder().decode(decodeBase64Url(parts[1])))}catch{return null}
+ if(header.alg!=='ES256'||typeof header.kid!=='string'||!header.kid||typeof payload.sub!=='string'||!payload.sub)return null;
+ const now=Math.floor(Date.now()/1000);
+ if(payload.iss!==origin.origin+'/auth/v1'||payload.aud!=='authenticated'||payload.role!=='authenticated'||typeof payload.exp!=='number'||payload.exp<=now||typeof payload.iat!=='number'||payload.iat>now+60)return null;
+ try{
+  const response=await fetch(origin.origin+'/auth/v1/.well-known/jwks.json',{headers:{accept:'application/json'},cf:{cacheTtl:300,cacheEverything:true}});
+  if(!response.ok)return null;
+  const jwks=await response.json();
+  const jwk=Array.isArray(jwks.keys)?jwks.keys.find(k=>k.kid===header.kid&&k.kty==='EC'&&k.crv==='P-256'&&k.alg==='ES256'):null;
+  if(!jwk)return null;
+  const key=await crypto.subtle.importKey('jwk',jwk,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
+  const data=new TextEncoder().encode(parts[0]+'.'+parts[1]);
+  const valid=await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},key,decodeBase64Url(parts[2]),data);
+  return valid?payload.sub:null;
+ }catch{return null}
+}
+
 export default {async fetch(request,env){
  const url=new URL(request.url);
  if(url.pathname==='/health')return json({ok:true,version:'research-v1',publicApiEnabled:env.ENABLE_PUBLIC_API==='true',sources:['open_food_facts',...(env.APPROVED_PRODUCT_FEED_URL?['approved_feed']:[])]});
@@ -44,6 +79,11 @@ export default {async fetch(request,env){
  const match=url.pathname.match(/^\/api\/products\/(\d{8,14})$/);
  if(!match)return json({error:'Not found. Use /api/products/{barcode}'},404);
  if(request.method!=='GET')return json({error:'Method not allowed'},405);
+ const userId=await authenticatedUser(request,env);
+ if(!userId)return authError('Authentication required or Supabase not configured.');
+ // The Cloudflare rate-limiter binding must exist before public access can be enabled.
+ if(!env.USER_RATE_LIMIT||typeof env.USER_RATE_LIMIT.limit!=='function')return authError('Rate limiter not configured.',503);
+ try{const limit=await env.USER_RATE_LIMIT.limit({key:userId});if(!limit.success)return authError('Too many requests. Please try later.',429)}catch{return authError('Rate limiter unavailable.',503)}
  const code=match[1],sources=[],errors=[];
  let product=null;
  try{product=await openFoodFacts(code);if(product)sources.push({source:'Open Food Facts',url:'https://world.openfoodfacts.org/product/'+code,kind:'community',updated:product.last_modified_t||null});}catch(e){errors.push('Open Food Facts: '+e.message)}
