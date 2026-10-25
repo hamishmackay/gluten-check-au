@@ -2,7 +2,7 @@
 import {readURL,decode,text} from './research.js';
 const manufacturers=[{brand:'ayam',origin:'https://ayam.com',index:'/products'},{brand:'red tractor',origin:'https://www.redtractorfoods.com.au',index:'/ranges/oats'},{brand:'majans',origin:'https://majans.com.au',index:'/bhuja/'}];
 const tokens=s=>String(s||'').toLowerCase().match(/[a-z]+/g)||[];
-export function links(html,base){return [...new Set([...html.matchAll(/href=["']([^"']+)["']/gi)].map(m=>{try{return new URL(decode(m[1]),base).href}catch{return ''}}).filter(u=>u.startsWith(new URL(base).origin)))];}
+export function links(html,base){return [...new Set([...html.matchAll(/href=["']([^"']+)["']/gi)].map(m=>{try{return new URL(decode(m[1]),base).href}catch{return ''}}).filter(u=>{try{return new URL(u).origin===new URL(base).origin}catch{return false}}))];}
 export async function catalogCandidates(identity,fetcher=fetch){
  const config=manufacturers.find(x=>tokens(identity?.brands).join(' ').includes(x.brand));if(!config)return {urls:[],errors:[]};
  const errors=[],urls=new Set(),wanted=tokens(identity.product_name);
@@ -29,14 +29,16 @@ export function ayamPage(html,url,code){
 // Every returned link must still pass the fetched-page GTIN/name/size checks.
 export async function retailerCandidates(code,identity,fetcher=fetch){
  const query=identity?.product_name?[identity.brands,identity.product_name,identity.quantity].filter(Boolean).join(' '):code;
- const stores=[{origin:'https://www.woolworths.com.au',path:'/shop/search/products',parameter:'searchTerm',product:/^\/shop\/productdetails\/\d+\//},{origin:'https://www.harrisfarm.com.au',path:'/search',parameter:'q',product:/^\/products\//}];
+ const stores=[{origin:'https://www.woolworths.com.au',path:'/shop/search/products',parameter:'searchTerm',product:/^\/shop\/productdetails\/\d+\//},{origin:'https://www.harrisfarm.com.au',shopify:true,product:/^\/products\//},{origin:'https://www.umall.com.au',shopify:true,product:/^\/products\//}];
  const found=[],errors=[];
  await Promise.all(stores.map(async store=>{
-  const url=new URL(store.path,store.origin);url.searchParams.set(store.parameter,query);
+  const url=new URL(store.shopify?'/search/suggest.json':store.path,store.origin);url.searchParams.set(store.shopify?'q':store.parameter,store.shopify?code:query);if(store.shopify){url.searchParams.set('resources[type]','product');url.searchParams.set('resources[limit]','3')}
   try{
-   const page=await readURL(url.href,fetcher,[new URL(store.origin).hostname]);
+   let page=await readURL(url.href,fetcher,[new URL(store.origin).hostname]);
+   let products=store.shopify?JSON.parse(page.body).resources?.results?.products||[]:null;
+   if(store.shopify&&!products.length&&identity?.product_name){url.searchParams.set('q',query);page=await readURL(url.href,fetcher,[new URL(store.origin).hostname]);products=JSON.parse(page.body).resources?.results?.products||[]}
    const wanted=tokens(identity?.product_name||'');const score=u=>wanted.filter(w=>tokens(new URL(u).pathname).includes(w)).length;
-   const candidates=links(page.body,page.url).filter(u=>store.product.test(new URL(u).pathname));
+   const candidates=(store.shopify?products.flatMap(p=>{try{const u=new URL(p.url,store.origin);return u.origin===store.origin?[u.href]:[]}catch{return []}}):links(page.body,page.url)).filter(u=>store.product.test(new URL(u).pathname));
    found.push(...candidates.sort((a,b)=>score(b)-score(a)).slice(0,3));
   }catch(e){errors.push(new URL(store.origin).hostname+' catalogue: '+e.message)}
  }));

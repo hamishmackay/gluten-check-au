@@ -51,7 +51,7 @@ export function extractStatements(content){
  add('allergens',/(?<!may )(?<!also )\bcontains?\s*:?\s+[^.;]{1,220}/gi);
  add('gluten_not_detected',/\bgluten\s*[:\-]?\s*not detected\b/gi);
  for(const m of content.matchAll(/\bgluten[ -]free\b/gi)){const prefix=content.slice(Math.max(0,m.index-65),m.index).split(/[.;!?]/).pop();if(!/\b(?:not|never|cannot|isn't|isnt|can't|cant)\b/i.test(prefix))out.push({type:'gluten_free_claim',excerpt:m[0]})}
- return out;
+ return [...new Map(out.map(s=>[s.type+'|'+s.excerpt.toLowerCase(),s])).values()];
 }
 export function assessEvidence(product,results){
  const statements=results.flatMap(r=>r.statements);const claim=statements.some(s=>s.type==='gluten_free_claim');const notDetected=statements.some(s=>s.type==='gluten_not_detected');

@@ -12,16 +12,21 @@ try{
  await page.goto(base,{waitUntil:'domcontentloaded',timeout:30000});await page.locator('#barcode').waitFor();
  const expected=JSON.parse(await readFile(new URL('../worker/public/preview-build.json',import.meta.url),'utf8'));assert.equal(await page.locator('meta[name="preview-source-digest"]').getAttribute('content'),expected.sourceDigest,'Live app does not match this source version');
  for(const code of codes){
+  let observed={};
   try{
-   await page.locator('#barcode').fill(code);await page.locator('#lookup').click();
+   await page.locator('#barcode').fill(code);const responsePromise=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/products/'+code,{timeout:90000});await page.locator('#lookup').click();const response=await responsePromise;assert.equal(response.status(),200,'Live product API failed');const api=await response.json();
    await page.waitForFunction(()=>document.querySelector('#result .status')?.textContent&&!document.querySelector('#result .status').textContent.includes('Checking'),null,{timeout:90000});
    const text=await page.locator('#result').innerText();
    const links=await page.locator('#result a').evaluateAll(els=>els.map(e=>({text:e.textContent,url:e.href})));
    await page.screenshot({path:'test-results/'+code+'.png',fullPage:true});
-   const hasPage=links.some(l=>!/openfoodfacts|google\.com/.test(l.url));
+   observed={links,text,sourceErrors:[...(api.errors||[]),...(api.web?.errors||[])]};const evidence=(api.web?.results||[]).filter(p=>p.verification==='page_retrieved'&&p.statements?.length);
+   const hasPage=evidence.length&&evidence.every(p=>links.some(l=>l.url===p.url));
    assert.ok(hasPage&&/Retrieved product-page evidence/.test(text)&&!/No matching product page could be verified/.test(text),'No verified product-page declaration displayed');
-   assert.match(text,/ingredients|allergens|gluten/i);report.push({code,passed:true,links,text});
-  }catch(error){report.push({code,passed:false,error:error.message})}
+   for(const p of evidence)for(const statement of p.statements)assert.ok(text.replace(/\s+/g,' ').includes(statement.excerpt.replace(/\s+/g,' ')),'Fetched declaration missing from rendered UI');
+   await page.locator('#glutenPreference').evaluate(e=>e.closest('details').open=true);
+   for(const mode of ['strict','moderate','flexible']){await page.locator('#glutenPreference').selectOption(mode);if(api.assessment.conflicting)assert.match(await page.locator('#result .status').innerText(),/CONFLICTING/);else if(api.assessment.status==='RED')assert.match(await page.locator('#result .status').innerText(),/GLUTEN RISK/)}
+   report.push({code,passed:true,...observed});
+  }catch(error){report.push({code,passed:false,...observed,error:error.message})}
  }
 }finally{await writeFile('test-results/browser-live.json',JSON.stringify(report,null,2));await browser.close()}
 console.log(JSON.stringify(report));if(report.length!==4||report.some(x=>!x.passed))process.exitCode=1;

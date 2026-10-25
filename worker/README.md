@@ -61,3 +61,10 @@ The original GitHub Pages frontend remains unchanged until the PR is reviewed.
 Live API/browser CI waits for that digest from native Workers Builds before testing.
 The browser job uses actual calls and saves screenshots/results as an Actions artifact.
 There is no added deployment token, paid search service or product-result fixture.
+
+Native retailer discovery now includes Woolworths search and Shopify's documented
+public predictive search at Harris Farm and Umall. Shopify product search includes
+variant barcodes, and named fallback is used only after a barcode query has no result.
+Only candidate URLs are taken from discovery; statements are extracted from the
+subsequently retrieved product pages. Oversized, screened or unavailable responses
+remain explicit source failures. This improves coverage but does not guarantee it.

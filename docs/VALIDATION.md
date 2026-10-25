@@ -75,3 +75,23 @@ The three product discovery gaps remain independently unresolved.
   before real browser/API tests, rather than treating a successful build as proof.
 - The new real-browser job records screenshots and JSON from actual API calls.
   Any failed acceptance product keeps that job red; no successful clearance is faked.
+
+## Live app review and direct catalogue work
+
+- Native Workers Builds successfully published the full app preview, and the
+  source-digest check passed from GitHub. Run 40179795445 exercised the real app,
+  captured screenshots, and confirmed rice-noodle source excerpts and links render.
+  Its complete four-product browser/API gates FAILED; the other three did not have
+  accepted declarations on that deployed run. The oats success in local research is
+  therefore not yet reliable across environments.
+- Screenshots were downloaded and visually reviewed at mobile width. Further UI
+  edits removed the misleading strict-mode note when a separate GF claim is present
+  and deduplicated identical declarations.
+- Added direct Woolworths search and documented Shopify predictive-search discovery
+  for Harris Farm and Umall, using barcode fields before name fallback. JSON catalogue
+  responses provide URLs only; fetched pages still need product matching and actual
+  declarations. Bhuja returned no candidate URLs from a local direct-store probe.
+- A separate GS1 Digital Link resolver probe returned 404 for all four requested
+  GTINs, so it has not been misrepresented as a working identification provider.
+- Current local deterministic suite: 21 tests passed. Final deployed checks of these
+  latest changes remain a distinct gate; no four-product completion is claimed.
