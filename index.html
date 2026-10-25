@@ -94,7 +94,10 @@ async function lookup(){
   if(!response.ok)throw Error('Research service HTTP '+response.status);
   const data=await response.json();if(generation!==lookupGeneration)return;
   lastResearch=data;displayResearch(data);
- }catch(error){if(generation!==lookupGeneration)return;el('result').className='card amber';el('result').innerHTML='<div class="status">AMBER — RESEARCH UNAVAILABLE</div><p>'+escapeHtml(error.message)+'</p><p>No gluten clearance established.</p>'+sourceResearch(code,'');}
+ }catch(error){
+  if(generation!==lookupGeneration)return;
+  try{const fallback=await fetch('https://world.openfoodfacts.org/api/v2/product/'+code+'.json?fields=product_name,brands,ingredients_text,allergens,traces,labels,allergens_tags,traces_tags',{signal:AbortSignal.timeout(10000)});if(!fallback.ok)throw Error('Database HTTP '+fallback.status);const record=await fallback.json();if(generation!==lookupGeneration)return;const p=record.status===1?record.product:null;const risk=/\b(wheat|barley|rye|spelt|triticale|oats?|malt|gluten)\b/i.test([p?.ingredients_text,p?.allergens,p?.traces,...(p?.allergens_tags||[]),...(p?.traces_tags||[])].join(' ').replace(/gluten[ -]free/gi,''));lastResearch={barcode:code,found:!!p,product:p,assessment:{status:risk?'RED':'AMBER',claim:false,reason:risk?'Gluten-related ingredients or warnings recorded in the community database.':'Research unavailable. Community data alone does not verify gluten status.'},web:{results:[],errors:[error.message]}};displayResearch(lastResearch)}catch(fallbackError){if(generation!==lookupGeneration)return;el('result').className='card amber';el('result').innerHTML='<div class="status">AMBER — RESEARCH UNAVAILABLE</div><p>'+escapeHtml(error.message)+'; '+escapeHtml(fallbackError.message)+'</p><p>No gluten clearance established.</p>'+sourceResearch(code,'');}
+ }
 }
 function displayResearch(data){const view=GlutenResearchUI.renderResearch(data,prefEl.value);el('result').className='card '+view.tone;el('result').innerHTML=view.html;current=data.found?{code:data.barcode,name:data.product?.product_name||data.barcode}:null;const save=el('save');if(save)save.onclick=saveCurrent;}
 renderSaved();

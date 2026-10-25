@@ -8,10 +8,10 @@ export async function catalogCandidates(identity,fetcher=fetch){
  const errors=[],urls=new Set(),wanted=tokens(identity.product_name);
  const stem=w=>w.replace(/s$/,'');const score=u=>wanted.filter(w=>tokens(new URL(u).pathname).map(stem).includes(stem(w))).length;
  try{
-  const index=await readURL(config.origin+config.index,fetcher);const all=links(index.body,index.url).filter(u=>score(u)>0).sort((a,b)=>score(b)-score(a));
+  const index=await readURL(config.origin+config.index,fetcher,[new URL(config.origin).hostname]);const all=links(index.body,index.url).filter(u=>score(u)>0).sort((a,b)=>score(b)-score(a));
   for(const u of all.filter(u=>/\/product\/|\/range\/|\/product\//.test(u)).slice(0,4))urls.add(u);
   const category=all.filter(u=>!/\/product\/|\/range\//.test(u)&&/\/products\/|\/ranges\//.test(u)).sort((a,b)=>score(b)-score(a)||new URL(a).pathname.split('/').length-new URL(b).pathname.split('/').length).slice(0,4);
-  await Promise.all(category.map(async u=>{try{const page=await readURL(u,fetcher);for(const v of links(page.body,page.url).filter(v=>/\/product\/|\/range\//.test(v)&&score(v)>0).sort((a,b)=>score(b)-score(a)).slice(0,3))urls.add(v)}catch(e){errors.push(e.message)}}));
+  await Promise.all(category.map(async u=>{try{const page=await readURL(u,fetcher,[new URL(config.origin).hostname]);for(const v of links(page.body,page.url).filter(v=>/\/product\/|\/range\//.test(v)&&score(v)>0).sort((a,b)=>score(b)-score(a)).slice(0,3))urls.add(v)}catch(e){errors.push(e.message)}}));
  }catch(e){errors.push(config.origin+': '+e.message)}
  return {urls:[...urls].sort((a,b)=>score(b)-score(a)).slice(0,6),errors};
 }

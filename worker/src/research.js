@@ -5,11 +5,11 @@ const agent='GlutenCheckAU/0.3 (+https://github.com/hamishmackay/gluten-check-au
 export function safeURL(value){
  try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&(!u.port||u.port==='443')&&/^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|au|org|net|co|uk|nz)$/i.test(u.hostname)&&!/(?:^|\.)(?:localhost|local|internal|test|example)\./i.test(u.hostname)?u:null}catch{return null}
 }
-export async function readURL(value,fetcher=fetch){
- let url=safeURL(value);if(!url)throw Error('Blocked source URL');
+export async function readURL(value,fetcher=fetch,allowedHosts=null){
+ let url=safeURL(value);if(!url||allowedHosts&&!allowedHosts.includes(url.hostname))throw Error('Blocked source URL');
  for(let i=0;i<4;i++){
   const r=await fetcher(url.href,{redirect:'manual',headers:{'user-agent':agent,accept:'text/html,application/json'},signal:AbortSignal.timeout(10000)});
-  if(r.status>=300&&r.status<400){const location=r.headers.get('location');if(!location)throw Error('Missing redirect');url=safeURL(new URL(location,url).href);if(!url)throw Error('Blocked redirect');continue}
+  if(r.status>=300&&r.status<400){const location=r.headers.get('location');if(!location)throw Error('Missing redirect');url=safeURL(new URL(location,url).href);if(!url||allowedHosts&&!allowedHosts.includes(url.hostname))throw Error('Blocked redirect');continue}
   if(!r.ok)throw Error('HTTP '+r.status);
   if(!/html|json|xml|text/i.test(r.headers.get('content-type')||''))throw Error('Unsupported format');
   const reader=r.body.getReader();let size=0;const chunks=[];try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1500000)throw Error('Page too large');chunks.push(value)}}finally{await reader.cancel()}
@@ -33,7 +33,7 @@ export function parsePage(html,url,code,identity){
  const p=products[0];const name=text(p?.name||title);const brand=text(typeof p?.brand==='object'?p.brand.name:p?.brand||'');
  if(title&&p?.name&&!words(p.name).every(w=>words(title).includes(w)))return null;
  let match=p&&sameCode(p)?'exact_barcode':null;
- if(!match&&mainText.includes(code)&&title&&mainText.includes(title))match='barcode_in_product_page';
+ if(!match&&new RegExp('\\b(?:barcode|ean|gtin|apn)\\s*[:#]?\\s*0*'+code+'\\b','i').test(mainText)&&title&&mainText.includes(title))match='barcode_in_product_page';
  if(!match&&identity?.product_name&&identity?.brands&&identity?.quantity){
   const expected=words(identity.brands.split(',')[0]+' '+identity.product_name+' '+identity.quantity);const actual=words(name);
   if(expected.length>=3&&expected.every(w=>actual.includes(w)))match='brand_name_pack_size';
@@ -61,12 +61,12 @@ export function assessEvidence(product,results){
 }
 export async function discover(query,fetcher=fetch){
  const endpoints=['https://html.duckduckgo.com/html/?q=','https://www.bing.com/search?q='];const links=new Set(),errors=[];
- for(const endpoint of endpoints){try{const {body}=await readURL(endpoint+encodeURIComponent(query),fetcher);if(/anomaly|captcha|unusual traffic/i.test(body))throw Error('Search challenge');const resultHTML=endpoint.includes('bing.com')?(body.match(/<li class="b_algo"[\s\S]*?<\/li>/gi)||[]).join(' '):(body.match(/<a\b[^>]*class=["'][^"']*result__a[^"']*["'][\s\S]*?<\/a>/gi)||[]).join(' ');for(const m of resultHTML.matchAll(/href=["']([^"']+)["']/gi)){let v=decode(m[1]);try{const u=new URL(v,endpoint);if(u.searchParams.has('uddg'))v=u.searchParams.get('uddg');if(u.hostname.endsWith('bing.com')&&u.pathname==='/ck/a'){const encoded=u.searchParams.get('u');if(encoded?.startsWith('a1'))v=atob(encoded.slice(2).replace(/-/g,'+').replace(/_/g,'/'))}}catch{continue}const u=safeURL(v);if(u&&!/(?:duckduckgo|bing|microsoft)\./.test(u.hostname))links.add(u.href)}if(links.size)break}catch(e){errors.push(new URL(endpoint).hostname+': '+e.message)}}
+ for(const endpoint of endpoints){try{const {body}=await readURL(endpoint+encodeURIComponent(query),fetcher,[new URL(endpoint).hostname]);if(/anomaly|captcha|unusual traffic/i.test(body))throw Error('Search challenge');const resultHTML=endpoint.includes('bing.com')?(body.match(/<li class="b_algo"[\s\S]*?<\/li>/gi)||[]).join(' '):(body.match(/<a\b[^>]*class=["'][^"']*result__a[^"']*["'][\s\S]*?<\/a>/gi)||[]).join(' ');for(const m of resultHTML.matchAll(/href=["']([^"']+)["']/gi)){let v=decode(m[1]);try{const u=new URL(v,endpoint);if(u.searchParams.has('uddg'))v=u.searchParams.get('uddg');if(u.hostname.endsWith('bing.com')&&u.pathname==='/ck/a'){const encoded=u.searchParams.get('u');if(encoded?.startsWith('a1'))v=atob(encoded.slice(2).replace(/-/g,'+').replace(/_/g,'/'))}}catch{continue}const u=safeURL(v);if(u&&!/(?:duckduckgo|bing|microsoft)\./.test(u.hostname))links.add(u.href)}if(links.size)break}catch(e){errors.push(new URL(endpoint).hostname+': '+e.message)}}
  return {urls:[...links].slice(0,6),errors};
 }
 export async function research(code,product,fetcher=fetch){
  let identity=product?.product_name?product:null;const results=[],errors=[],seen=new Set();
- const inspect=async d=>{errors.push(...d.errors);const candidates=d.urls.filter(u=>safeURL(u)&&sourceHosts.includes(new URL(u).hostname)&&!seen.has(u));candidates.forEach(u=>seen.add(u));const pages=await Promise.all(candidates.map(async u=>{try{const page=await readURL(u,fetcher);return parsePage(page.body,page.url,code,identity)}catch(e){errors.push(new URL(u).hostname+': '+e.message);return null}}));for(const page of pages.filter(Boolean)){if(!results.some(r=>r.url===page.url))results.push(page);if(!identity&&page.match==='exact_barcode')identity=page.identity}};
+ const inspect=async d=>{errors.push(...d.errors);const candidates=d.urls.filter(u=>safeURL(u)&&sourceHosts.includes(new URL(u).hostname)&&!seen.has(u));candidates.forEach(u=>seen.add(u));const pages=await Promise.all(candidates.map(async u=>{try{const page=await readURL(u,fetcher,sourceHosts);return parsePage(page.body,page.url,code,identity)}catch(e){errors.push(new URL(u).hostname+': '+e.message);return null}}));for(const page of pages.filter(Boolean)){if(!results.some(r=>r.url===page.url))results.push(page);if(!identity&&page.match==='exact_barcode')identity=page.identity}};
  await inspect(await discover('"'+code+'"',fetcher));
  if(identity?.product_name){const [search,catalog]=await Promise.all([discover([identity.brands,identity.product_name,identity.quantity,'Australia ingredients allergens'].filter(Boolean).join(' '),fetcher),catalogCandidates(identity,fetcher)]);await inspect({urls:[...catalog.urls,...search.urls].slice(0,8),errors:[...search.errors,...catalog.errors]})}
  return {status:results.length?(errors.length?'partial':'ok'):'unavailable',provider:'public_html_pages',results,errors,identity};
