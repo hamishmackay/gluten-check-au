@@ -29,7 +29,8 @@ try{
  await page.locator('#barcode').fill('1234567890128');await page.locator('#lookup').click();await page.locator('#labelPhoto').waitFor({state:'visible'});assert.equal(await page.locator('#labelPhotoEvidence').innerText(),'');checks.push('A new lookup clears previous photo evidence');
  const positive=await synthetic(['DEMO RICE SNACK','INGREDIENTS: Rice, water, salt.','GLUTEN NOT DETECTED.','GLUTEN FREE.']);
  await readPhoto(positive);await page.locator('#glutenPreference').evaluate(e=>e.closest('details').open=true);
- for(const mode of ['strict','moderate','flexible']){await page.locator('#glutenPreference').selectOption(mode);assert.ok((await page.locator('#labelPhotoEvidence').getAttribute('class')).includes('amber'));assert.ok(!(await page.locator('#labelPhotoEvidence .status').innerText()).includes('VERIFIED SAFE'))}
+ if(!live)await page.evaluate(()=>{lastResearch=null});
+ for(const mode of ['strict','moderate','flexible']){await page.locator('#glutenPreference').selectOption(mode);assert.ok((await page.locator('#labelPhotoEvidence').getAttribute('class')).includes('amber'));const labelStatus=await page.locator('#labelPhotoEvidence .status').innerText();assert.ok(!labelStatus.includes('VERIFIED SAFE'));if(!live){if(mode==='strict')assert.match(labelStatus,/AMBER/);if(mode==='moderate')assert.match(labelStatus,/GLUTEN NOT DETECTED/);if(mode==='flexible')assert.match(labelStatus,/GLUTEN DECLARATION/)}}
  checks.push('Positive OCR wording remains unverified under every preference');
  await page.locator('#labelPhoto').setInputFiles(risk);await page.locator('#labelPhotoCancel').click();assert.match(await page.locator('#labelPhotoStatus').innerText(),/cancelled/);assert.equal(await page.locator('#labelPhotoEvidence').innerText(),'');checks.push('Cancellation clears evidence and restores the input');
  // Independently retrieved manufacturer label image: image text, not a preset OCR answer.
