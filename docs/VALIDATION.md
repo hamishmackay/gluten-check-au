@@ -23,7 +23,10 @@ Not complete. Do not promote this draft to production.
   all four probes and has NOT been integrated as a reliable provider.
 - Local browser execution could not start: Chromium missing, and Playwright browser
   download returned an invalid/truncated archive. A real browser test is included in
-  CI; its status must be checked separately from the unit renderer tests.
+  CI. GitHub run 40177815269 subsequently PASSED both the 16-test suite and
+  Chromium browser checks (controlled API fixtures: lookup, source links, ingredient
+  display, preferences, save and mobile layout). Real-product browser display and
+  physical camera hardware are still unverified.
 - Preview deployment run 40177607860 failed before deployment: both CF_TOKEN and
   CF_ACCOUNT were empty. Required repository Actions secrets are
   CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. The production /health URL also
