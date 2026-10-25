@@ -1,8 +1,10 @@
 {
   "private": true,
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "test": "node scripts/build-preview.mjs --check && node --test tests/*.test.mjs",
     "test:live": "node tests/live.mjs",
-    "test:browser": "node tests/browser.mjs"
+    "test:browser": "node tests/browser.mjs",
+    "build:preview": "node scripts/build-preview.mjs",
+    "test:browser:live": "node tests/browser-live.mjs"
   }
 }

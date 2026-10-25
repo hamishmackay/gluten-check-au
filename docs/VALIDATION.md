@@ -57,3 +57,21 @@ The live preview and production health URLs still returned HTTP 403 from this
 execution environment; this alone does not establish whether Cloudflare access
 configuration or the execution network caused it. No access control was weakened.
 The three product discovery gaps remain independently unresolved.
+
+## Continued development and live access verification
+
+- GitHub run 40179333803 called the real native Cloudflare preview successfully.
+  The API returned HTTP 200 and actual product research, so earlier execution-host
+  HTTP 403 responses are not a deployment-credential prerequisite.
+- That deployed run still passed only Rice Flake Noodles and failed the other three.
+- Subsequent local real-upstream run found an exact-GTIN Woolworths oats page with
+  ingredients and `Contains: Gluten`, bringing local coverage to 2/4. Curry sauce
+  and Bhuja remain unresolved. This is not a four-product pass.
+- Added GTIN contradiction rejection, HTTP-200 screening detection, filtering of
+  unsupported links before result limits, concurrent discoveries and source-attempt
+  diagnostics. The current local deterministic suite has 19 passing tests.
+- Added reproducible static preview assets using the same-origin API, an incomplete
+  research banner and a source digest. GitHub checks wait for the exact source digest
+  before real browser/API tests, rather than treating a successful build as proof.
+- The new real-browser job records screenshots and JSON from actual API calls.
+  Any failed acceptance product keeps that job red; no successful clearance is faked.

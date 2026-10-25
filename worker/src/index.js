@@ -13,7 +13,7 @@ async function openFoodFacts(code){
 }
 export default {async fetch(request,env){
  const url=new URL(request.url);
- if(url.pathname==='/health')return json({ok:true,version:'research-v3',enabled:env.ENABLE_PUBLIC_API==='true',discovery:'public-html-and-manufacturer-catalogs'});
+ if(url.pathname==='/health')return json({ok:true,version:'research-v3',deployment:env.CF_VERSION_METADATA?.id||null,enabled:env.ENABLE_PUBLIC_API==='true',discovery:'public-html-and-manufacturer-catalogs'});
  if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,OPTIONS','access-control-allow-headers':'content-type'}});
  const match=url.pathname.match(/^\/api\/products\/(\d{8,14})$/);
  if(!match)return json({error:'Not found'},404);

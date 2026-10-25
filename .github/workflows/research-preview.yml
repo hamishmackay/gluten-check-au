@@ -37,4 +37,26 @@ jobs:
       - name: Check existing Cloudflare preview and all acceptance products
         env:
           RESEARCH_API_BASE: https://feature-page-evidence-research-gluten-check-au-research.h-mackay1.workers.dev
-        run: npm run test:live
+        run: |
+          node scripts/wait-preview.mjs
+          npm run test:live
+  live-browser:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      RESEARCH_API_BASE: https://feature-page-evidence-research-gluten-check-au-research.h-mackay1.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-save --package-lock=false playwright
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/wait-preview.mjs
+      - run: npm run test:browser:live
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-browser-evidence
+          path: test-results/
